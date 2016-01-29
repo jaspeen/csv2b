@@ -7,8 +7,9 @@
     <groupId>org.jeesy</groupId>
     <artifactId>csv2b</artifactId>
     <version>0.2</version>
-
+    <name>csv2b</name>
     <description>Yet another csv parser/mapper with detail error processing</description>
+    <url>http://github.com/jaspeen/csv2b</url>
 
     <licenses>
         <license>
@@ -22,10 +23,27 @@
         <connection>scm:git:http://github.com/jaspeen/csv2b.git</connection> 
         <tag>HEAD</tag>
     </scm>
+    <developers>
+        <developer>
+            <name>Artem Mironov</name>
+            <email>jaspeen@gmail.com</email>
+            <roles>
+                <role>developer</role>
+            </roles>
+            <timezone>+3</timezone>
+        </developer>
+    </developers>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
 
     <build>
         <plugins>
@@ -69,13 +87,38 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.sonatype.plugins</groupId>
+                <artifactId>nexus-staging-maven-plugin</artifactId>
+                <version>1.6.6</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <serverId>ossrh</serverId>
+                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>1.6</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
     <dependencies>
         <dependency>
             <groupId>org.jeesy</groupId>
             <artifactId>classinfo</artifactId>
-            <version>0.5-SNAPSHOT</version>
+            <version>0.5</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
