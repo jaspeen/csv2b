@@ -17,12 +17,10 @@ package org.jeesy.csv2b;
 
 import org.jeesy.classinfo.ClassInfo;
 import org.jeesy.classinfo.PropertyInfo;
-import org.jeesy.classinfo.converter.DefaultConverter;
-import org.jeesy.classinfo.converter.api.StringConverter;
+import org.jeesy.classinfo.converter.api.ConversionService;
 import org.jeesy.classinfo.indexes.CommonClassIndex;
 import org.jeesy.classinfo.indexes.PropertyIndex;
 
-import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.*;
@@ -38,17 +36,19 @@ public class CsvModel {
     private char quoteChar = '"';
     private String endOfLine = "\r\n";
     private boolean ignoreEmptyLines = true;
-    private StringConverter converter = defaultConverter();
+    private char commentChar = '#';
+    private ConversionService converter = defaultConverter();
 
-    public CsvModel(char separatorChar, char quoteChar, String endOfLine, boolean ignoreEmptyLines, StringConverter converter) {
+    public CsvModel(char separatorChar, char quoteChar, String endOfLine, boolean ignoreEmptyLines, char commentChar, ConversionService converter) {
         this.separatorChar = separatorChar;
         this.quoteChar = quoteChar;
         this.endOfLine = endOfLine;
         this.ignoreEmptyLines = ignoreEmptyLines;
+        this.commentChar = commentChar;
         this.converter = converter;
     }
 
-    public CsvReader newReader(Reader reader) throws IOException {
+    public CsvReader newReader(Reader reader) {
         return new CsvReader(reader, this);
     }
 
@@ -60,11 +60,11 @@ public class CsvModel {
         return new CsvBeanReader<>(beanType, reader, header, this);
     }
 
-    public CsvWriter newWriter(Writer writer) throws IOException{
+    public CsvWriter newWriter(Writer writer) {
         return new CsvWriter(writer, this);
     }
 
-    public <T> CsvBeanWriter<T> newBeanWriter(Class<T> beanType, Writer writer) throws IOException{
+    public <T> CsvBeanWriter<T> newBeanWriter(Class<T> beanType, Writer writer) {
         return new CsvBeanWriter<>(beanType, writer, this);
     }
 
@@ -84,67 +84,13 @@ public class CsvModel {
         return ignoreEmptyLines;
     }
 
-    public StringConverter getConverter() {
+    public char getCommentChar() {
+        return commentChar;
+    }
+
+    public ConversionService getConverter() {
         return converter;
     }
 
-    public static class CsvIndex implements PropertyIndex, CommonClassIndex {
-        private List<String> header = new ArrayList<>();
-        private Map<String, String> headerToFieldMap = new HashMap<>();
-        private Set<String> required = new HashSet<>();
-
-        @Override
-        public void index(ClassInfo container, PropertyInfo propertyInfo) {
-            CsvCol csvCol = propertyInfo.getAnnotation(CsvCol.class);
-            String headerName = propertyInfo.getName();
-            if(csvCol != null) {
-                //TODO: support embedded pojos
-                /*if(csvCol.embedded() && propertyInfo.getClassInfo().hasAnnotation(CsvRow.class)) {
-                    for(Map.Entry<String, PropertyInfo> entry : (Set<Map.Entry>)propertyInfo.getClassInfo().getProperties().entrySet()) {
-                        headerToFieldMap.put()
-                    }
-                }*/
-                if(!csvCol.name().isEmpty()) headerName = csvCol.name();
-                if(csvCol.required()) required.add(headerName);
-
-            }
-            headerToFieldMap.put(headerName, propertyInfo.getName());
-        }
-
-        public Set<String> getRequiredColumns() {
-            return required;
-        }
-
-        public List<String> getHeader() {
-            return header;
-        }
-
-        public String getFieldNameByColumnName(String name) {
-            return headerToFieldMap.get(name);
-        }
-
-        public String getHeaderByPos(int pos) {
-            return header.get(pos-1);
-        }
-
-        @Override
-        public void index(ClassInfo<?> classInfo) {
-            ClassInfo<?> parent = classInfo.getParent();
-            if(parent != null) {
-                header.addAll(parent.getIndex(CsvIndex.class).getHeader());
-            }
-            CsvRow row = classInfo.getAnnotation(CsvRow.class);
-            if(row != null && row.names().length > 0) {
-                header.addAll(Arrays.asList(row.names()));
-            } else {
-                header.addAll(headerToFieldMap.keySet());
-            }
-        }
-
-        public static CsvIndex forClass(Class<?> type) {
-            return classInfo(type).getIndex(CsvIndex.class);
-        }
-    }
-
-    public final static CsvModel STANDARD = new CsvModel(',', '\"',"\r\n",true,defaultConverter());
+    public final static CsvModel STANDARD = new CsvModel(',','\"',"\r\n",true,'#', defaultConverter());
 }

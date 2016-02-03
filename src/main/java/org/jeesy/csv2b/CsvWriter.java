@@ -25,28 +25,35 @@ import java.io.Writer;
  * @author Artem Mironov
  */
 public class CsvWriter implements Closeable, Flushable{
-    protected String[] header;
     protected CsvModel model;
     protected Writer writer;
     protected int rowNum = 1;
     protected int colNum = 1;
+    private boolean alwaysEscape = false;
 
     public CsvWriter(Writer writer, CsvModel model) {
         this.writer = writer;
         this.model = model;
     }
 
-
-    public CsvWriter(String [] header, Writer writer, CsvModel model) {
-        this.writer = writer;
-        this.model = model;
-        this.header = header;
+    private static boolean containsAny(String val, char ... chars) {
+        for(int i = 0; i<val.length(); i++) {
+            for(char c : chars) {
+                if(val.charAt(i) == c) return true;
+            }
+        }
+        return false;
     }
 
-    private void escapeAndWrite(String val) throws IOException {
-        //if(val.indexOf(model.getQuoteChar()) >= 0 || val.indexOf(model.get))
+    private void checkEscapeAndWriteCol(String val) throws IOException {
+        if (alwaysEscape || containsAny(val, model.getQuoteChar(), model.getSeparatorChar(), '\n', '\r'))
+            escapeAndWriteCol(val);
+        else writer.write(val);
+    }
+
+    private void escapeAndWriteCol(String val) throws IOException {
         writer.append(model.getQuoteChar());
-        writer.append(val.replace("\"","\"\""));
+        writer.append(val.replace("\"", "\"\""));
         writer.append(model.getQuoteChar());
     }
 
@@ -59,7 +66,7 @@ public class CsvWriter implements Closeable, Flushable{
         for(String col : row) {
             try {
                 if(colNum != 1) writer.append(model.getSeparatorChar());
-                escapeAndWrite(col);
+                checkEscapeAndWriteCol(col);
                 colNum++;
             } catch (IOException e) {
                 throw new CsvException(rowNum, colNum, e);
@@ -67,6 +74,16 @@ public class CsvWriter implements Closeable, Flushable{
         }
         try {
             writer.append(model.getEndOfLine());
+        } catch (IOException e) {
+            throw new CsvException(rowNum, colNum, e);
+        }
+    }
+
+    public void writeComment(String comment) throws CsvException {
+        try {
+            writer.write(model.getCommentChar());
+            writer.write(comment);
+            writer.write(model.getEndOfLine());
         } catch (IOException e) {
             throw new CsvException(rowNum, colNum, e);
         }

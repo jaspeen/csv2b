@@ -26,38 +26,24 @@ import java.util.List;
  * @author Artem Mironov
  */
 public class CsvReader implements Closeable {
-    protected String[] header;
-    private Reader reader;
-    protected CsvModel model;
+    private final Reader reader;
+    private final CsvModel model;
 
-    public CsvReader(String[] header, Reader reader, CsvModel model) {
-        this.header = header;
+    protected CsvReader(Reader reader, CsvModel model) {
         this.reader = reader;
         this.model = model;
     }
 
-    public CsvReader(Reader reader, CsvModel model) {
-        this.reader = reader;
-        this.model = model;
-    }
 
-    protected String [] readHeader() throws CsvException {
-        return readRaw();
-    }
-
-    public String [] getHeader() {
-        return header;
-    }
-
-    protected int rowNum = 1;
-    protected int colNum = 1;
+    protected int rowNum = 0;
+    protected int colNum = 0;
     private boolean wasCR = false;
 
-    protected interface ColumnProcessor {
+    public interface ColumnProcessor {
         boolean onValue(int rowNum, int colNum, String value);
     }
 
-    protected class ListColumnProcessor implements ColumnProcessor {
+    public class ArrayColumnProcessor implements ColumnProcessor {
         private List<String> data = new ArrayList<>();
 
         @Override
@@ -66,7 +52,11 @@ public class CsvReader implements Closeable {
             return true;
         }
 
-        public String[] getData() {
+        public List<String> getData() {
+            return data;
+        }
+
+        public String [] toArray() {
             return data.toArray(new String[data.size()]);
         }
     }
@@ -76,8 +66,9 @@ public class CsvReader implements Closeable {
         boolean onValue(int rowNum, T value);
     }
 
-    public class ListRowHandler implements RowHandler<String[]> {
+    public static class ListRowHandler implements RowHandler<String[]> {
         private List<String[]> rows = new ArrayList<>();
+        private int lastRowNum = 0;
         @Override
         public boolean onError(CsvException e) {
             throw e;
@@ -86,7 +77,16 @@ public class CsvReader implements Closeable {
         @Override
         public boolean onValue(int rowNum, String[] value) {
             rows.add(value);
+            lastRowNum = rowNum;
             return true;
+        }
+
+        public List<String[]> getRows() {
+            return rows;
+        }
+
+        public int getLastRowNum() {
+            return lastRowNum;
         }
     }
 
@@ -95,30 +95,33 @@ public class CsvReader implements Closeable {
         T value;
         @Override
         public boolean onError(CsvException e) {
+            this.exception = e;
             return false;
         }
 
         @Override
         public boolean onValue(int rowNum, T value) {
+            this.value = value;
             return true;
         }
     }
 
     /**
      * Return true if it reported any value
-     * @param consumer
+     * @param processor column processor what will be called on each column value
      * @return
      * @throws IOException
      */
-    protected boolean readRow(ColumnProcessor consumer) throws IOException {
+    protected boolean realReadRow(ColumnProcessor processor) throws IOException {
         int val = reader.read();
-        if(val == -1) return false;
+        if(val == -1) return false; else rowNum++;
         StringBuilder out = new StringBuilder();
         boolean inQuote = false;
         colNum = 0;
         boolean delayedQuote = false;
         boolean anyValue = false;
         while(val != -1) {
+
             char charVal = (char) val;
             if(inQuote) {
                 if(model.getQuoteChar() == charVal) {
@@ -137,7 +140,7 @@ public class CsvReader implements Closeable {
                       inQuote = true;
                   }
                 } else if(charVal == model.getSeparatorChar()) {
-                    if(!consumer.onValue(rowNum, ++colNum, out.toString())) return false;
+                    if(!processor.onValue(rowNum, ++colNum, out.toString())) return false;
                     out.setLength(0);
                     anyValue = true;
                 } else if(charVal == '\n') {
@@ -159,22 +162,20 @@ public class CsvReader implements Closeable {
             val = reader.read();
         }
         if(inQuote) throw new RuntimeException("Unfinished quote");
-        if(val == -1) colNum++;
-        boolean ret = consumer.onValue(rowNum, colNum, out.toString());
-        rowNum++;
+        boolean ret = processor.onValue(rowNum, ++colNum, out.toString());
         return ret && (anyValue || out.length() > 0);
     }
 
-    public <T extends RowHandler<String[]>> T readAll(T rowHandler) throws CsvException {
+    public <T extends RowHandler<String[]>> T read(T rowHandler) throws CsvException {
         while(readRow(rowHandler));
         return rowHandler;
     }
 
-    public String [] readRaw() throws CsvException {
+    public String [] readRow() throws CsvException {
         try {
-            ListColumnProcessor lcp = new ListColumnProcessor();
-            readRow(lcp);
-            return lcp.getData();
+            ArrayColumnProcessor lcp = new ArrayColumnProcessor();
+            realReadRow(lcp);
+            return lcp.toArray();
         } catch (IOException e) {
             throw new CsvException(rowNum, colNum, e);
         }
@@ -184,7 +185,7 @@ public class CsvReader implements Closeable {
         final List<String> res = new ArrayList<>();
         boolean ret;
         try {
-            ret = readRow(new ColumnProcessor() {
+            ret = realReadRow(new ColumnProcessor() {
                 @Override
                 public boolean onValue(int rowNum, int colNum, String value) {
                     res.add(value);
@@ -201,5 +202,9 @@ public class CsvReader implements Closeable {
     @Override
     public void close() throws IOException {
         reader.close();
+    }
+
+    public CsvModel getModel() {
+        return model;
     }
 }

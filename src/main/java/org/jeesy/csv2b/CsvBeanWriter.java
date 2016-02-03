@@ -17,9 +17,13 @@ package org.jeesy.csv2b;
 
 import org.jeesy.classinfo.ClassInfo;
 import org.jeesy.classinfo.PropertyInfo;
+import org.jeesy.classinfo.TypeInfo;
+import org.jeesy.classinfo.converter.api.Converter;
+import org.jeesy.classinfo.converter.api.StringSerializer;
+import org.jeesy.classinfo.selector.PropertyHandle;
+import org.jeesy.classinfo.selector.PropertySelector;
 
 import java.io.Writer;
-import java.util.List;
 
 import static org.jeesy.classinfo.ClassInfoScanner.classInfo;
 
@@ -28,7 +32,6 @@ import static org.jeesy.classinfo.ClassInfoScanner.classInfo;
  *
  * @author Artem Mironov
  */
-//TODO: too many object copy here
 public class CsvBeanWriter<T> extends CsvWriter {
     private Class<T> beanType;
     public CsvBeanWriter(Class<T> beanType, Writer writer, CsvModel model) {
@@ -38,27 +41,40 @@ public class CsvBeanWriter<T> extends CsvWriter {
 
     public void writeHeader() {
         ClassInfo<T> ci = classInfo(beanType);
-        CsvModel.CsvIndex idx = ci.getIndex(CsvModel.CsvIndex.class);
-        write(idx.getHeader().toArray(new String[idx.getHeader().size()]));
+        CsvIndex idx = ci.getIndex(CsvIndex.class);
+        write(idx.getHeader());
     }
 
     public void writeBean(T bean) {
         write(beanToArray(bean));
     }
 
-    protected String [] beanToArray(T bean) {
+    public String [] beanToArray(T bean) {
         ClassInfo<T> ci = classInfo((Class<T>)bean.getClass());
-        CsvModel.CsvIndex idx = ci.getIndex(CsvModel.CsvIndex.class);
-        List<String> header = idx.getHeader();
-        String [] res = new String[header.size()];
+        CsvIndex idx = ci.getIndex(CsvIndex.class);
+        String [] header = idx.getHeader();
+        String [] res = new String[header.length];
         for(int i = 0; i<res.length; i++) {
-            PropertyInfo pi = ci.getPropertyInfo(idx.getFieldNameByColumnName(header.get(i)));
-            if(pi == null) throw new RuntimeException("Wrong header");
-            Object rawVal = pi.getValue(bean);
-            String val = model.getConverter().toString(pi.getTypeInfo(), rawVal);
+            PropertySelector selector = PropertySelector.parse(idx.getFieldNameByColumnName(header[i]).getPath());
+            PropertyHandle handle = selector.resolve(bean);
+
+            Object rawVal = handle.getValue();
+            String val = toString(handle.getInfo(), rawVal);
             if(val == null) val = "";
             res[i] = val;
         }
         return res;
+    }
+
+    private static final TypeInfo<String> STRING_TYPE_INFO = TypeInfo.forClass(String.class);
+
+    @SuppressWarnings("unchecked")
+    private String toString(PropertyInfo pi, Object value) {
+        Converter<Object, String> converter = model.getConverter().converterFor(pi.getType(), String.class);
+        CsvCol csvCol = pi.getAnnotation(CsvCol.class);
+        if(csvCol != null && !StringSerializer.class.equals(csvCol.serializer())) {
+            converter = model.getConverter().converterByType(csvCol.serializer());
+        }
+        return converter.convert(value, pi.getTypeInfo(), STRING_TYPE_INFO);
     }
 }

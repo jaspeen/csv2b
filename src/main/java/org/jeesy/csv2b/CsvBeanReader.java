@@ -18,7 +18,10 @@ package org.jeesy.csv2b;
 import org.jeesy.classinfo.ClassInfo;
 import org.jeesy.classinfo.ClassInfoScanner;
 import org.jeesy.classinfo.PropertyInfo;
-import org.jeesy.classinfo.converter.api.ConversionException;
+import org.jeesy.classinfo.TypeInfo;
+import org.jeesy.classinfo.converter.api.*;
+import org.jeesy.classinfo.selector.PropertyHandle;
+import org.jeesy.classinfo.selector.PropertySelector;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -28,21 +31,27 @@ import java.io.Reader;
  */
 public class CsvBeanReader<T> extends CsvReader {
     private ClassInfo<T> classInfo;
+    private String [] header;
     private boolean ignoreUnknownColumns = true;
+    //when converter returns null for specified field it will be untouched
+    //this allow to hold defaults in bean even when empty column specified in csv
+    private boolean skipSettingNullValues = true;
+    private boolean strictSize = false;
     public CsvBeanReader(Class<T> beanType, Reader reader, String [] header, CsvModel model) throws CsvException {
         super(reader, model);
         classInfo = ClassInfoScanner.classInfo(beanType);
+
         if(header == null)
-            this.header = classInfo.getIndex(CsvModel.CsvIndex.class).getHeader().toArray(new String[0]);
+            header = classInfo.getIndex(CsvIndex.class).getHeader();
 
     }
 
-    public CsvBeanReader(Class<T> beanType, Reader reader, boolean readHeader, CsvModel model) throws CsvException {
+    public CsvBeanReader(Class<T> beanType, Reader reader, boolean useHeaderFromFile, CsvModel model) throws CsvException {
         super(reader, model);
         classInfo = ClassInfoScanner.classInfo(beanType);
-        if(readHeader) header = readHeader();
-        else header = classInfo.getIndex(CsvModel.CsvIndex.class).getHeader().toArray(new String[0]);
 
+        if(useHeaderFromFile) header = readRow();
+        else header = classInfo.getIndex(CsvIndex.class).getHeader();
     }
 
     public void readBeans(final RowHandler<T> rowHandler) {
@@ -53,15 +62,19 @@ public class CsvBeanReader<T> extends CsvReader {
         SimpleRowHandler<T> t = new SimpleRowHandler<T>() {
             @Override
             public boolean onValue(int rowNum, T value) {
+                super.onValue(rowNum, value);
                 return false;
             }
         };
+        readOne(t);
         if(t.exception != null) throw t.exception;
         else return t.value;
     }
 
+    private static final TypeInfo<String> STRING_TYPE_INFO = TypeInfo.forClass(String.class);
+
     public boolean readOne(final RowHandler<T> rowHandler) {
-        final CsvModel.CsvIndex csvIndex = classInfo.getIndex(CsvModel.CsvIndex.class);
+        final CsvIndex csvIndex = classInfo.getIndex(CsvIndex.class);
         final T instance;
         try {
             instance = classInfo.getType().newInstance();
@@ -70,22 +83,35 @@ public class CsvBeanReader<T> extends CsvReader {
         }
         boolean ret;
         try {
-            ret = readRow(new ColumnProcessor() {
+            ret = realReadRow(new ColumnProcessor() {
                 @Override
                 public boolean onValue(int rowNum, int colNum, String value) {
                     try {
+                        if(colNum > header.length) throw new RuntimeException("Too much columns");
+                        String columnName = header[colNum-1];
+                        CsvIndex.CsvProp prop = csvIndex.getFieldNameByColumnName(columnName);
+                        if(prop == null) {
+                            return ignoreUnknownColumns || rowHandler.onError(new CsvException(rowNum, colNum, new RuntimeException("Property not found by header " + columnName)));
+                        }
+                        String propertyName = prop.getPath();
+                        PropertySelector selector = PropertySelector.parse(prop.getPath()).createNullElements();
 
-                        String propertyName = csvIndex.getFieldNameByColumnName(header[colNum-1]);
-                        if(propertyName == null) {
-                            if(ignoreUnknownColumns) return true;
-                            else return rowHandler.onError(new CsvException(rowNum, colNum, new RuntimeException("Property not found by header "+header[colNum-1])));
+                        PropertyHandle handle = null;
+                        try {
+                            handle = selector.resolve(instance);
+                        } catch(Exception e) {
+                            return rowHandler.onError(new CsvException(rowNum, colNum, e));
                         }
-                        PropertyInfo pi = classInfo.getPropertyInfo(propertyName);
-                        if(pi == null) {
-                            return rowHandler.onError(new CsvException(rowNum, colNum, new RuntimeException("Property not found by name "+propertyName)));
+
+
+                        Converter<String, Object> converter = getModel().getConverter().converterFor(String.class, handle.getInfo().getType());
+                        if(handle.getInfo().hasAnnotation(CsvCol.class) && StringParser.class.equals(handle.getInfo().getAnnotation(CsvCol.class).parser())) {
+                            StringParser<Object> parser = getModel().getConverter().converterByType(handle.getInfo().getAnnotation(CsvCol.class).parser());
+                            if(parser != null) converter = parser;
                         }
-                        Object val = model.getConverter().fromString(pi.getTypeInfo(), value);
-                        pi.setValue(instance, val);
+                        if(converter == null) throw new RuntimeException("Cannot find converter from String to "+handle.getInfo().getType());
+                        Object val = converter.convert(value, STRING_TYPE_INFO, handle.getInfo().getTypeInfo());
+                        handle.setValue(val);
 
                         return true;
                     } catch(ConversionException e) {

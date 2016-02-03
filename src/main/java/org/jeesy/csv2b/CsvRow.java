@@ -31,8 +31,14 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 public @interface CsvRow {
     /**
-     * Ordered header.
-     * Should only list columns declared in annotated class since they will be concatenated with parent row definition header
+     * Fields names in order how it should be used to write.
+     * Should only list columns declared in annotated class since they will be concatenated with parent order
      */
-    String [] names() default {};
+    String [] declaredOrder() default {};
+
+    /**
+     * Full order including all parent properties
+     * If order is not empty the mapper will ignore declaredOrder attribute
+     */
+    String [] order() default {};
 }

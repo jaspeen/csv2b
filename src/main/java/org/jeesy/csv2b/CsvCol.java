@@ -16,6 +16,8 @@
 package org.jeesy.csv2b;
 
 import org.jeesy.classinfo.converter.api.StringConverter;
+import org.jeesy.classinfo.converter.api.StringParser;
+import org.jeesy.classinfo.converter.api.StringSerializer;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -39,10 +41,14 @@ public @interface CsvCol {
     String name() default "";
 
     /**
-     * Converter to be used for this column.
-     * Default is {@link StringConverter} what means mapper will use converter from {@link CsvModel}
+     * Converter from string for this column.
      */
-    Class<StringConverter> converter() default StringConverter.class;
+    Class<StringParser> parser() default StringParser.class;
+
+    /**
+     * Converter to string
+     */
+    Class<StringSerializer> serializer() default StringSerializer.class;
 
     /**
      * Reader should generate exception on columns which required by not in csv file
@@ -50,8 +56,4 @@ public @interface CsvCol {
      */
     boolean required() default false;
 
-    /**
-     * Mark property as embedded bean
-     */
-    boolean embedded() default false;
 }
