@@ -6,7 +6,7 @@
 
     <groupId>org.jeesy</groupId>
     <artifactId>csv2b</artifactId>
-    <version>0.2</version>
+    <version>0.3-SNAPSHOT</version>
     <name>csv2b</name>
     <description>Yet another csv parser/mapper with detail error processing</description>
     <url>http://github.com/jaspeen/csv2b</url>
