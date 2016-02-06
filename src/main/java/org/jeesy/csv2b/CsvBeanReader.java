@@ -105,7 +105,7 @@ public class CsvBeanReader<T> extends CsvReader {
 
 
                         Converter<String, Object> converter = getModel().getConverter().converterFor(String.class, handle.getInfo().getType());
-                        if(handle.getInfo().hasAnnotation(CsvCol.class) && StringParser.class.equals(handle.getInfo().getAnnotation(CsvCol.class).parser())) {
+                        if(handle.getInfo().hasAnnotation(CsvCol.class) && !StringParser.class.equals(handle.getInfo().getAnnotation(CsvCol.class).parser())) {
                             StringParser<Object> parser = getModel().getConverter().converterByType(handle.getInfo().getAnnotation(CsvCol.class).parser());
                             if(parser != null) converter = parser;
                         }
