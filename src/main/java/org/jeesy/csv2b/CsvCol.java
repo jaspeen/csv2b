@@ -15,7 +15,6 @@
  */
 package org.jeesy.csv2b;
 
-import org.jeesy.classinfo.converter.api.StringConverter;
 import org.jeesy.classinfo.converter.api.StringParser;
 import org.jeesy.classinfo.converter.api.StringSerializer;
 
@@ -43,17 +42,22 @@ public @interface CsvCol {
     /**
      * Converter from string for this column.
      */
-    Class<StringParser> parser() default StringParser.class;
+    Class<? extends StringParser> parser() default StringParser.class;
 
     /**
      * Converter to string
      */
-    Class<StringSerializer> serializer() default StringSerializer.class;
+    Class<? extends StringSerializer> serializer() default StringSerializer.class;
 
     /**
-     * Reader should generate exception on columns which required by not in csv file
-     * Writer should generate exception if this property is null when required is true
+     * Reader should generate exception on columns which required but not exists in csv file
+     * Writer should generate exception if this property is null
      */
     boolean required() default false;
+
+    /**
+     * If csv value is empty string pass null to converters
+     */
+    boolean nullIfEmpty() default true;
 
 }

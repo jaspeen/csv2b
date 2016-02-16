@@ -21,11 +21,17 @@ import org.jeesy.classinfo.converter.api.ConversionException;
  * @author Artem Mironov
  */
 public class CsvException extends RuntimeException {
-    private int row;
-    private int col;
+    private int row = 0;
+    private int col = 0;
     private ConversionException conversionException;
     private Exception exception;//any other exception including {@link IOException}
+    public CsvException(ConversionException e) {
+        exception = conversionException = e;
+    }
 
+    public CsvException(Exception e) {
+        exception = e;
+    }
     public CsvException(int row, int col, ConversionException e) {
         this.row = row;
         this.col = col;

@@ -17,19 +17,22 @@ package org.jeesy.csv2b;
 
 import org.jeesy.classinfo.ClassInfo;
 import org.jeesy.classinfo.ClassInfoScanner;
-import org.jeesy.classinfo.PropertyInfo;
 import org.jeesy.classinfo.TypeInfo;
-import org.jeesy.classinfo.converter.api.*;
+import org.jeesy.classinfo.converter.api.ConversionException;
+import org.jeesy.classinfo.converter.api.Converter;
+import org.jeesy.classinfo.converter.api.StringParser;
 import org.jeesy.classinfo.selector.PropertyHandle;
 import org.jeesy.classinfo.selector.PropertySelector;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.util.Iterator;
 
 /**
+ * Read beans from csv stream
  * @author Artem Mironov
  */
-public class CsvBeanReader<T> extends CsvReader {
+public class CsvBeanReader<T> extends CsvReader implements Iterable<T> {
     private ClassInfo<T> classInfo;
     private String [] header;
     private boolean ignoreUnknownColumns = true;
@@ -42,7 +45,7 @@ public class CsvBeanReader<T> extends CsvReader {
         classInfo = ClassInfoScanner.classInfo(beanType);
 
         if(header == null)
-            header = classInfo.getIndex(CsvIndex.class).getHeader();
+            this.header = classInfo.getIndex(CsvIndex.class).getHeader();
 
     }
 
@@ -54,10 +57,22 @@ public class CsvBeanReader<T> extends CsvReader {
         else header = classInfo.getIndex(CsvIndex.class).getHeader();
     }
 
-    public void readBeans(final RowHandler<T> rowHandler) {
+
+    /**
+     * Read beans till row handler returns true in onValue and onError or IOException occurred
+     * @param rowHandler handler to accept values and errors
+     * @return rowHandler parameter
+     */
+    public RowHandler<T> readBeans(final RowHandler<T> rowHandler) {
         while(readOne(rowHandler));
+        return rowHandler;
     }
 
+    /**
+     * Read single bean from csv stream
+     * @return new instance of type T filled with values from csv row
+     * @throws CsvException if any error occurred
+     */
     public T readBean() throws CsvException {
         SimpleRowHandler<T> t = new SimpleRowHandler<T>() {
             @Override
@@ -73,6 +88,11 @@ public class CsvBeanReader<T> extends CsvReader {
 
     private static final TypeInfo<String> STRING_TYPE_INFO = TypeInfo.forClass(String.class);
 
+    /**
+     * Read bean from csv stream passing values and errors to rowHandler
+     * @param rowHandler to accept errors and constructed bean instance
+     * @return true if some data filled without errors
+     */
     public boolean readOne(final RowHandler<T> rowHandler) {
         final CsvIndex csvIndex = classInfo.getIndex(CsvIndex.class);
         final T instance;
@@ -84,6 +104,7 @@ public class CsvBeanReader<T> extends CsvReader {
         boolean ret;
         try {
             ret = realReadRow(new ColumnProcessor() {
+                @SuppressWarnings("unchecked")
                 @Override
                 public boolean onValue(int rowNum, int colNum, String value) {
                     try {
@@ -94,7 +115,7 @@ public class CsvBeanReader<T> extends CsvReader {
                             return ignoreUnknownColumns || rowHandler.onError(new CsvException(rowNum, colNum, new RuntimeException("Property not found by header " + columnName)));
                         }
                         String propertyName = prop.getPath();
-                        PropertySelector selector = PropertySelector.parse(prop.getPath()).createNullElements();
+                        PropertySelector selector = PropertySelector.parse(propertyName).createNullElements();
 
                         PropertyHandle handle = null;
                         try {
@@ -105,13 +126,18 @@ public class CsvBeanReader<T> extends CsvReader {
 
 
                         Converter<String, Object> converter = getModel().getConverter().converterFor(String.class, handle.getInfo().getType());
-                        if(handle.getInfo().hasAnnotation(CsvCol.class) && !StringParser.class.equals(handle.getInfo().getAnnotation(CsvCol.class).parser())) {
-                            StringParser<Object> parser = getModel().getConverter().converterByType(handle.getInfo().getAnnotation(CsvCol.class).parser());
+                        CsvCol csvCol = handle.getInfo().getAnnotation(CsvCol.class);
+                        if(csvCol != null && !StringParser.class.equals(csvCol.parser())) {
+                            StringParser<Object> parser = getModel().getConverter().converterByType(csvCol.parser());
                             if(parser != null) converter = parser;
                         }
-                        if(converter == null) throw new RuntimeException("Cannot find converter from String to "+handle.getInfo().getType());
+                        if(converter == null) throw new ConversionException(value, STRING_TYPE_INFO, handle.getInfo().getTypeInfo(), "Cannot find converter from String to ");
+                        if(value != null && value.isEmpty() && (csvCol == null || csvCol.nullIfEmpty())) {
+                            value = null;
+                        }
                         Object val = converter.convert(value, STRING_TYPE_INFO, handle.getInfo().getTypeInfo());
-                        handle.setValue(val);
+                        if(val != null || !skipSettingNullValues)
+                            handle.setValue(val);
 
                         return true;
                     } catch(ConversionException e) {
@@ -126,5 +152,25 @@ public class CsvBeanReader<T> extends CsvReader {
             return false;
         }
         return ret && rowHandler.onValue(rowNum-1, instance);
+    }
+
+    @Override
+    public Iterator<T> iterator() {
+        return new Iterator<T>() {
+            @Override
+            public boolean hasNext() {
+                return false;
+            }
+
+            @Override
+            public T next() {
+                return readBean();
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException("Remove is not supported here");
+            }
+        };
     }
 }

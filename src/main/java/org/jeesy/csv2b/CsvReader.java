@@ -109,7 +109,6 @@ public class CsvReader implements Closeable {
     /**
      * Return true if it reported any value
      * @param processor column processor what will be called on each column value
-     * @return
      * @throws IOException
      */
     protected boolean realReadRow(ColumnProcessor processor) throws IOException {

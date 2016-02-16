@@ -35,7 +35,14 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Target({ ANNOTATION_TYPE, FIELD, METHOD})
 @Retention(RUNTIME)
 public @interface CsvEmbed {
+    /**
+     * Prefix for all embedded columns
+     */
     String headerPrefix() default "";
+
+    /**
+     * Metadata overrides for embedded columns
+     */
     CsvColOverride [] overrides() default {};
 
     @Target({ ANNOTATION_TYPE, FIELD, METHOD})

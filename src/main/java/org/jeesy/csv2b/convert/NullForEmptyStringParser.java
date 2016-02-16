@@ -24,6 +24,7 @@ import org.jeesy.classinfo.converter.api.ConversionService;
 import org.jeesy.classinfo.converter.api.StringParser;
 
 /**
+ * Converter what turns empty strings to null values.
  * @author Artem Mironov
  */
 public class NullForEmptyStringParser<T> implements StringParser<T> {
